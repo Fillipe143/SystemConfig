@@ -1,0 +1,40 @@
+# Global properties
+separator=true
+separator_block_width=15
+color=#8ba4b0
+
+[memory]
+command=free -m | awk 'NR==2{printf "󰍛 %.1fGB\n", $3/1024 }'
+interval=30
+
+[wifi]
+command=~/projects/scripts/wifi.sh status
+interval=once
+signal=30
+
+[network]
+command=cat /proc/net/dev | awk '/wlan0/ {printf "󰕒 %.0fMB 󰇚 %.0fMB\n", $10/1024/1024, $2/1024/1024}'
+interval=1
+
+[bluetooth]
+command=~/projects/scripts/bluetooth.sh status
+interval=once
+signal=2
+
+[audio]
+command=~/projects/scripts/audio_volume.sh status
+interval=once
+signal=3
+
+[backlight]
+command=~/projects/scripts/backlight_level.sh status
+interval=once
+signal=4
+
+[battery]
+command=~/projects/scripts/battery_level.sh
+interval=2
+
+[time]
+command=date '+%d/%m/%Y %H:%M:%S'
+interval=1
