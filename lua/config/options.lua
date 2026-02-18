@@ -35,3 +35,14 @@ vim.opt.signcolumn = "yes"
 
 -- Mostrar avisos no final da linha
 vim.diagnostic.config({ virtual_text = true, })
+
+-- Bordas redondas e sem background
+vim.opt.winborder = "rounded"
+vim.api.nvim_create_autocmd("ColorScheme", {
+    callback = function()
+        local normal_bg = vim.api.nvim_get_hl(0, { name = "Normal" }).bg
+        local float_border = vim.api.nvim_get_hl(0, { name = "FloatBorder" }).fg
+        vim.api.nvim_set_hl(0, "NormalFloat", { bg = normal_bg, })
+        vim.api.nvim_set_hl(0, "FloatBorder", { bg = normal_bg, fg = float_border, })
+    end,
+})

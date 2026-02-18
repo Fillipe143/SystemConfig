@@ -18,7 +18,7 @@ return {
 
         vim.api.nvim_create_autocmd("FileType", {
             pattern = "*",
-            callback = function() 
+            callback = function()
                 local ft = vim.bo.filetype
                 local ok, parser = pcall(vim.treesitter.get_parser, 0, ft)
                 if ok and parser then
