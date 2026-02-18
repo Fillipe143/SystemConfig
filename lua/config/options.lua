@@ -29,3 +29,9 @@ vim.keymap.set("n", "<leader>d", "<cmd>noh<CR>", { desc = "Desmarcar busca (nohl
 
 -- Ponteiro como block sempre
 vim.opt.guicursor = "n-v-c-sm-i-ci-ve-r-cr-o:block"
+
+-- Sempre mostrar coluna de simbolos
+vim.opt.signcolumn = "yes"
+
+-- Mostrar avisos no final da linha
+vim.diagnostic.config({ virtual_text = true, })
