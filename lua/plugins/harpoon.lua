@@ -3,6 +3,7 @@ return {
     config = function()
         local mark = require("harpoon.mark")
         local ui = require("harpoon.ui")
+        vim.api.nvim_set_hl(0, "HarpoonBorder", { link = "FloatBorder" })
         vim.keymap.set("n", "<leader>a", mark.add_file, { desc = "Adicionar o arquivo atual ao Harpoon" })
         vim.keymap.set("n", "<C-e>", ui.toggle_quick_menu, { desc = "Abrir o menu de navegação rápida do Harpoon" })
         vim.keymap.set("n", "<C-h>", function() ui.nav_file(1) end, { desc = "Navegar até o primeiro arquivo marcado" })

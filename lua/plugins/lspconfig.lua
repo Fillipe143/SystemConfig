@@ -11,5 +11,9 @@ return {
         -- Html
         vim.lsp.enable("html")
         vim.lsp.enable("emmet_language_server")
+
+        vim.keymap.set("n", "<leader>ai", function()
+            vim.lsp.buf.format({ async = true })
+        end)
     end,
 }

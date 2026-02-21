@@ -22,7 +22,7 @@ vim.opt.splitright = true
 
 -- Keybinds
 vim.keymap.set("n", "<leader><leader>", "<cmd>b#<CR>", { desc = "Voltar para o último buffer", })
-vim.keymap.set("n", "<leader>pv", "<cmd>Ex<CR>", { desc = "Abrir explorador de arquivos (Netrw)", })
+vim.keymap.set("n", "<leader>pv", "<cmd>Oil<CR>", { desc = "Abrir explorador de arquivos (Netrw)", })
 vim.keymap.set("n", "<C-d>", "<C-d>zz", { desc = "Rolar para baixo e centralizar a tela" })
 vim.keymap.set("n", "<C-u>", "<C-u>zz", { desc = "Rolar para cima e centralizar a tela" })
 vim.keymap.set("n", "<leader>d", "<cmd>noh<CR>", { desc = "Desmarcar busca (nohlsearch)" })
@@ -35,6 +35,10 @@ vim.opt.signcolumn = "yes"
 
 -- Mostrar avisos no final da linha
 vim.diagnostic.config({ virtual_text = true, })
+
+-- Salvar historico de edição
+vim.opt.undofile = true
+vim.opt.undodir = os.getenv("HOME") .. "/.nvim/undo"
 
 -- Bordas redondas e sem background
 vim.opt.winborder = "rounded"
