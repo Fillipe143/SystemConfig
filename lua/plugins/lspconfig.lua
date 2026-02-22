@@ -13,6 +13,8 @@ return {
         vim.keymap.set("n", "<leader>la", vim.lsp.buf.code_action, opts)                                          -- Code actions
         vim.keymap.set("n", "<leader>lm", vim.lsp.buf.rename, opts)                                               -- Renomear
         vim.keymap.set("n", "<leader>lf", function() vim.lsp.buf.format({ async = true }) end, opts)              -- Formatar código
+        vim.keymap.set("n", "<C-;>", "<Plug>(comment_toggle_linewise_current)", {})
+        vim.keymap.set("v", "<C-;>", "<Plug>(comment_toggle_linewise_visual)", {})
 
         -- Lua
         vim.lsp.config("lua_ls", require("plugins.lsp.lua_ls"))

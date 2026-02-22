@@ -1,36 +1,27 @@
--- Estado global das janelas e buffers (input e output)
-local state = {
-    input = { buf = -1, win = -1 },
-    output = { buf = -1, win = -1 },
+local config = {
+    output_title = "Output",
+    input_title = "Input",
+    output_width = 0.5,
+    output_height = 0.7,
+    cache_file = vim.fn.stdpath("data") .. "/autorunner.json"
 }
 
--- Caminho global do cache (JSON)
-local function get_cache_path()
-    return vim.fn.stdpath("data") .. "/autorunner.json"
-end
+local state = {
+    output = { buf = -1, win = -1, },
+    input = { buf = -1, win = -1, },
+}
 
--- Chave do projeto atual (baseada na pasta de trabalho)
-local function get_project_key()
-    local cwd = vim.fn.getcwd():gsub("[/\\:]", "_")
-    return cwd
-end
-
--- Cria uma janela flutuante reutilizando buffer se ele já existir
 local function create_floating_window(opts)
     opts = opts or {}
-    local ui = vim.api.nvim_list_uis()[1]
 
+    local ui = vim.api.nvim_list_uis()[1]
     local width = opts.width or math.floor(ui.width * 0.3)
     local height = opts.height or math.floor(ui.height * 0.3)
     local col = opts.col or math.floor((ui.width - width) / 2)
     local row = opts.row or math.floor((ui.height - height) / 2)
 
-    local buf = opts.buf
-    if not vim.api.nvim_buf_is_valid(buf) then
-        buf = vim.api.nvim_create_buf(false, true)
-    end
-
-    local win_opts = {
+    local buf = vim.api.nvim_buf_is_valid(opts.buf) and opts.buf or vim.api.nvim_create_buf(false, true)
+    local win = vim.api.nvim_open_win(buf, true, {
         relative = "editor",
         width = width,
         height = height,
@@ -38,60 +29,103 @@ local function create_floating_window(opts)
         row = row,
         style = "minimal",
         border = "rounded",
-        title = opts.title or " ",
+        title = opts.title or "",
         title_pos = "center",
-    }
-
-    local win = vim.api.nvim_open_win(buf, true, win_opts)
+    })
+    vim.api.nvim_set_option_value("winhl", "FloatTitle:Normal", { win = win })
     return { buf = buf, win = win }
 end
 
--- Fecha automaticamente ambas as janelas se uma delas for fechada
-local function auto_close_windows()
-    vim.api.nvim_create_autocmd("WinClosed", {
-        pattern = "*",
-        callback = function(args)
-            local closed = tonumber(args.match)
-            if closed == state.input.win or closed == state.output.win then
-                if vim.api.nvim_win_is_valid(state.input.win) then
-                    vim.api.nvim_win_close(state.input.win, true)
-                end
-                if vim.api.nvim_win_is_valid(state.output.win) then
-                    vim.api.nvim_win_close(state.output.win, true)
-                end
-            end
-        end,
-    })
+local function get_cache_content()
+    local file = io.open(config.cache_file, "r")
+    if not file then return {} end
+
+    local content = file:read("*a")
+    file:close()
+
+    local ok, decoded = pcall(vim.json.decode, content)
+    if not ok then return {} end
+
+    return decoded
 end
 
--- Esconde as janelas se estiverem abertas
-local function close_windows()
-    local open = false
-    if vim.api.nvim_win_is_valid(state.input.win) then
-        vim.api.nvim_win_hide(state.input.win)
-        open = true
-    end
-    if vim.api.nvim_win_is_valid(state.output.win) then
-        vim.api.nvim_win_hide(state.output.win)
-        open = true
-    end
-    return open
+local function save_data()
+    local cache = get_cache_content()
+    local cwd = vim.fn.getcwd()
+
+    local lines = vim.api.nvim_buf_get_lines(state.input.buf, 0, -1, false)
+    if not lines[1] then return end
+    cache[cwd] = string.sub(lines[1], 3)
+
+    local json = vim.json.encode(cache)
+    local file = io.open(config.cache_file, "w")
+    if not file then return end
+
+    file:write(json)
+    file:close()
 end
 
--- Cria a janela de saída (terminal)
-local function create_output_window(width, screen_height)
-    local height = math.floor(screen_height * 0.5)
-    local row = math.floor((screen_height - height) / 2 - 1)
+local function load_data()
+    local cache = get_cache_content()
+    local cwd = vim.fn.getcwd()
+    if cache[cwd] == nil then return end
+    vim.api.nvim_buf_set_lines(state.input.buf, 0, -1, false, { "" })
+    vim.api.nvim_feedkeys(cache[cwd], "n", false)
+end
 
-    state.output = create_floating_window({
-        title = " Autorunner Output ",
-        width = width,
-        height = height,
-        row = row,
-        buf = state.output.buf,
+local function stop_terminal()
+    local chan = vim.b[state.output.buf].terminal_job_id
+    vim.api.nvim_buf_call(state.output.buf, function()
+        vim.cmd("normal! G")
+        vim.api.nvim_chan_send(chan, "\x03")
+    end)
+end
+
+local function clear_terminal()
+    local chan = vim.b[state.output.buf].terminal_job_id
+    vim.api.nvim_chan_send(chan, "\x0c")
+end
+
+local function send_command()
+    local command = string.sub(vim.api.nvim_buf_get_lines(state.input.buf, 0, 1, false)[1], 3)
+    local chan = vim.b[state.output.buf].terminal_job_id
+
+    stop_terminal()
+    vim.defer_fn(function()
+        clear_terminal()
+        vim.api.nvim_chan_send(chan, " " .. command .. "\n")
+    end, 100)
+end
+
+local function open_windows()
+    local ui = vim.api.nvim_list_uis()[1]
+    state.output.title = config.output_title
+    state.input.title = config.input_title
+
+    state.output.width = math.floor(ui.width * config.output_width)
+    state.input.width = state.output.width
+
+    state.output.height = math.floor(ui.height * config.output_height)
+    state.input.height = 1
+
+    state.output.row = math.floor((ui.height - state.output.height) / 2 - state.input.height - 2)
+    state.input.row = math.floor((ui.height + state.output.height) / 2 - 1)
+
+    state.output = create_floating_window(state.output)
+    state.input = create_floating_window(state.input)
+
+    vim.api.nvim_set_option_value("modified", true, { buf = state.output.buf })
+    vim.api.nvim_set_option_value("modified", true, { buf = state.input.buf })
+
+    vim.keymap.set({ "i", "n" }, "<CR>", send_command, { buffer = state.input.buf, silent = true })
+    vim.keymap.set({ "i", "n" }, "<C-c>", stop_terminal, { buffer = state.input.buf, silent = true })
+    vim.keymap.set({ "i", "n" }, "<C-l>", clear_terminal, { buffer = state.input.buf, silent = true })
+
+    vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
+        group = vim.api.nvim_create_augroup("AutorunnerInput", { clear = true }),
+        buffer = state.input.buf,
+        callback = save_data,
     })
-
-    vim.api.nvim_set_keymap("t", "<Esc>", [[<C-\><C-n>]], { noremap = true, silent = true })
 
     if vim.bo[state.output.buf].buftype ~= "terminal" then
         vim.api.nvim_buf_call(state.output.buf, function()
@@ -99,115 +133,37 @@ local function create_output_window(width, screen_height)
         end)
     end
 
-    return height
-end
-
--- Cria a janela de entrada
-local function create_input_window(width, screen_height, output_height)
-    local height = 1
-    local row = math.floor((screen_height - output_height) / 2 + output_height + 1)
-
-    state.input = create_floating_window({
-        title = " Command Input ",
-        width = width,
-        height = height,
-        row = row,
-        buf = state.input.buf,
-    })
-
-    vim.bo[state.input.buf].buftype = "prompt"
-    vim.bo[state.input.buf].bufhidden = "wipe"
-    vim.bo[state.input.buf].swapfile = false
-
+    vim.api.nvim_set_option_value("buftype", "prompt", { buf = state.input.buf })
     vim.fn.prompt_setprompt(state.input.buf, "> ")
-
-    local cache_path = get_cache_path()
-    local project_key = get_project_key()
-
-    -- 🔹 Ler último comando do projeto
-    local last_command = ""
-    local f_read = io.open(cache_path, "r")
-    if f_read then
-        local content = f_read:read("*all")
-        f_read:close()
-        if content ~= "" then
-            local ok, data = pcall(vim.fn.json_decode, content)
-            if ok and data and data[project_key] then
-                last_command = data[project_key]
-                local lines = vim.split(last_command, "\n")
-                vim.api.nvim_buf_set_lines(state.input.buf, 0, -1, false, lines)
-            end
-        end
-    end
-
-    -- 🔹 Salvar automaticamente comando por projeto
-    vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
-        buffer = state.input.buf,
-        callback = function()
-            local lines = vim.api.nvim_buf_get_lines(state.input.buf, 0, -1, false)
-            local command = table.concat(lines, "\n")
-
-            local data = {}
-            local f_read = io.open(cache_path, "r")
-            if f_read then
-                local content = f_read:read("*all")
-                f_read:close()
-                if content ~= "" then
-                    local ok, decoded = pcall(vim.fn.json_decode, content)
-                    if ok and decoded then
-                        data = decoded
-                    end
-                end
-            end
-
-            data[project_key] = command
-
-            local f_save = io.open(cache_path, "w")
-            if f_save then
-                f_save:write(vim.fn.json_encode(data))
-                f_save:close()
-            end
-
-            vim.bo[state.input.buf].modified = false
-        end,
-    })
-
-    -- Envia comando para o terminal
-    local function send_command()
-        local lines = vim.api.nvim_buf_get_lines(state.input.buf, 0, -1, false)
-        if #lines > 0 then
-            lines[1] = lines[1]:gsub("^%s*>%s?", "")
-        end
-        local command = table.concat(lines, "\n")
-        if command == "" then return end
-
-        local job = vim.b[state.output.buf].terminal_job_id
-        if job then
-            vim.api.nvim_chan_send(job, "clear\n")
-            vim.api.nvim_chan_send(job, command .. "\n")
-        end
-        vim.cmd("stopinsert")
-    end
-
-    local opts = { buffer = state.input.buf, silent = true }
-    vim.keymap.set({ "i", "n" }, "<CR>", send_command, opts)
-    vim.keymap.set("n", "<Esc>", close_windows, opts)
-
-    vim.cmd("startinsert!")
-    auto_close_windows()
+    vim.cmd("startinsert")
+    load_data()
 end
 
--- Alterna o Autorunner
+local function hide_windows()
+    local is_open = false
+    if vim.api.nvim_win_is_valid(state.output.win) then
+        vim.api.nvim_set_option_value("modified", false, { buf = state.input.buf })
+        vim.api.nvim_win_hide(state.output.win)
+        is_open = true
+    end
+    if vim.api.nvim_win_is_valid(state.input.win) then
+        vim.api.nvim_set_option_value("modified", false, { buf = state.output.buf })
+        vim.api.nvim_win_hide(state.input.win)
+        is_open = true
+    end
+    return is_open
+end
+
 local function toggle_autorunner()
-    if close_windows() then return end
-
-    local ui = vim.api.nvim_list_uis()[1]
-    local width = math.floor(ui.width * 0.4)
-    local height = ui.height
-
-    local output_height = create_output_window(width, height)
-    create_input_window(width, height, output_height)
+    if not hide_windows() then open_windows() end
 end
+
+vim.api.nvim_create_autocmd("WinLeave", {
+    callback = function(args)
+        if args.buf == state.input.buf then hide_windows() end
+    end
+})
 
 vim.api.nvim_create_user_command("Autorunner", toggle_autorunner, {})
-vim.keymap.set({ "n", "t" }, "<leader>pt", toggle_autorunner)
+vim.keymap.set("n", "<Esc>", hide_windows, { buffer = state.input.buf, silent = true })
+vim.keymap.set("n", "<leader>pt", toggle_autorunner)
