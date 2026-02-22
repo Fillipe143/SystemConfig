@@ -27,5 +27,9 @@ return {
 
         -- Rust
         vim.lsp.enable("rust_analyzer")
+
+        -- Ocaml
+        vim.opt.rtp:prepend(vim.fn.expand("~/.opam/default/share/ocp-indent/vim"))
+        vim.lsp.enable("ocamllsp")
     end,
 }

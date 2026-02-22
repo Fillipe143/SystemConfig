@@ -1,3 +1,3 @@
 require("config.options")
 require("config.lazy")
-require("utils.terminal")
+require("utils.autorunner")
